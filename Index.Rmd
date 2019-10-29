@@ -1,0 +1,286 @@
+---
+title: "Colby RUG --`tidyr` v 1.0"
+author: " Manny Gimond"
+date: "2019.10.29"
+output: 
+  html_document:
+    toc: true
+    css: Tutorial.css
+    highlight: haddock
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, comment = NA)
+```
+
+This tutorial will cover many of the new and existing functions available in the `tidyr` package version `1.0`. It will also discuss changes in some of the more popular functions used in reshaping data tables.
+
+> Before continuing, make sure to load the `tidyr` package.
+
+```{r}
+library(tidyr)
+```
+
+## Wide and long versions of a table
+
+A 2014 Boston (Logan airport) flight data summary table will be used in this example. The summary displays average mean delay times (in minutes) by day of the week and quarter.
+
+```{r}
+df <- data.frame( Weekday = c( "Mon", "Tues", "Wed", "Thurs", "Fri" ),
+                  Q1      = c(  9.9 ,  4.9  ,  8.8 ,   12.2 ,  12.2 ),
+                  Q2      = c(  5.4 ,  9.7  , 11.1 ,   10.2 ,   8.1 ),
+                  Q3      = c(  8.8 ,  7.9  , 10.2 ,   9.2  ,   7.9 ),
+                  Q4      = c(  6.9 ,    5  ,  9.3 ,   9.7  ,   5.6 ))
+```
+
+```{r}
+df
+```
+
+There are three unique variables: day of week, quarter of year, and mean departure delay.
+
+### Creating a long table from a wide table: `pivot_longer`
+
+<img src="wide_to_long.PNG" style="width: 68%; height: auto;">
+
+
+To go from wide to long we use the `pivot_longer` function. This replaces the `gather()` function from earlier versions of `tidyr` (<`1.0`).
+
+The `pivot_longer` function takes at least three arguments:
+
+ + `cols`: list of columns that are to be collapsed. The columns can be referenced by column number or column name. Note that the column enumeration does not need to be wrapped in a `c()` function.
+ + `names_to`: This is the name of the new column which will combine all column names (e.g. Q1, Q2, Q3 and Q4).
+ + `values_to`: This is the name of the new column which will combine all column values (e.g. average delay times) associated with each variable combination (e.g. Mon and Q1, Tues and Q1, etc...)
+
+<img src="pivot_longer.PNG" style="width: 63%; height: auto;">
+
+In our example, the line of code needed to re-express the table into a long form can be written in several ways:
+
+```{r}
+df.long <- pivot_longer(df, cols=2:5, names_to = "Quarter", values_to = "Delay")
+# or
+df.long <- pivot_longer(df, cols=-1, names_to = "Quarter", values_to = "Delay")
+# or
+df.long <- pivot_longer(df, cols=Q1:Q4, names_to = "Quarter", values_to = "Delay")
+```
+
+```{r}
+df.long
+```
+
+
+### Creating a wide table from a long table: `pivot_wider`
+
+<img src="long_to_wide.PNG" style="width: 68%; height: auto;">
+
+If a table is to be used for a visual assessment of the values, a long format may be difficult to work with. A long table can be re-expressed into a wide form by picking the two variables that will define the column names and column values.
+
+Continuing with our earlier example, we will convert `df.long` back to a wide format using the `pivot_wider()` function. This replaces the `spread()` function from earlier versions of `tidyr` (<`1.0`). The `pivot_wider()` function takes at least two arguments:
+
+ + `names_from`: Column whose values will be converted to column names.
+ + `values_from`: Column whose values will populate the table's block of cell values.
+
+<img src="pivot_wider.PNG" style="width: 73%; height: auto;">
+
+
+```{r}
+df.wide <- pivot_wider(df.long, names_from = Quarter, values_from = Delay)
+df.wide
+```
+
+## Advanced `pivot_longer` options
+
+Here's a subset of median income by sex *and* by work experience for 2017. 
+
+```{r}
+df2 <- data.frame( state = c("Maine", "Massachusetts", 
+                             "New Hampshire", "Vermont"),
+                   male_fulltime = c(50329,66066, 59962, 50530), 
+                   male_other = c(18099, 18574, 20274, 17709), 
+                   female_fulltime = c(40054, 53841, 46178, 42198),
+                   female_other = c(13781, 14981, 15121, 14422))
+df2
+```
+
+At first glance, it might seem that we have three variables as in the earlier example, but upon closer examination, we see that we can tease out two variables from the column names: sex (`male` and `female`) and work experience (`fulltime` and `other`).
+
+<img src="double_header.PNG" style="width: 73%; height: auto;">
+
+`pivot_longer` has an argument, `names_sep`, that is passed the character that is used to delimit the two variable values. In our example, this character is `_`. Since the column values will be split across two variables we will also need to pass **two** column names to the `names_to` argument.
+
+<img src="long_to_separate_wide.PNG" style="width: 73%; height: auto;">
+
+```{r}
+df2.long <- pivot_longer(df2, cols=-1, names_to = c("sex","work"), 
+                         names_sep = "_", values_to = "income")
+df2.long
+```
+
+## Advanced `pivot_wider` options
+
+### Combining variable names when spreading
+
+Continuing with the `df2.long` dataframe, we can spread the long table back to a wide table while combining the `sex` and `work` variables. We'll add the `names_sep` argument which defines the character to use to separate the two variable names. We'll use a dot `.` separator in this example.
+
+```{r}
+pivot_wider(df2.long, names_from = c(sex,work), values_from = income,
+            names_sep = ".")
+```
+
+### Spreading duplicate variable combinations
+
+If your long table has more than one unique combination of variables, `pivot_wider()` will return a list. This differs from the `spread()`'s behavior which would have returned an error.
+
+```{r}
+df3 <- data.frame(var1 = c("a", "a", "b", "b"),
+                  var2 = c("x", "x", "y", "y"),
+                  val  = c(5,3,1,4))
+df3
+```
+
+```{r error=TRUE}
+pivot_wider(df3, names_from = var2, values_from = val)
+```
+
+Since the intersections of `a`:`x`  and `b`:`y` each have two possible values, the function returns a *list* of values. Assuming that the duplicate records are not an erroneous entry, you will need to instruct the function on how to summarize the multiple values using the `values_fn` argument. For example, to return  the maximum value, type:
+
+```{r error=TRUE}
+pivot_wider(df3, names_from = var2, values_from = val, 
+            values_fn = list(val = min))
+```
+
+You'll note the empty cells resulting from there not being a valid combination for `a`:`y` and `b`:`x`. You can specify the missing values using the `values_fill` argument. For example, to replace `NA` with `0` type:
+
+```{r error=TRUE}
+pivot_wider(df3, names_from = var2, values_from = val, 
+            values_fn   = list(val = min),
+            values_fill = list(val = 0))
+```
+
+
+## Separating elements in one column into separate columns
+
+The `tidyr` package offers other functions not directly tied to pivoting. For example, to split a column into two or more columns based on a column's delimited value, use the `separate()` function.
+
+```{r}
+# Let's first create a delimited table
+df2.long <- pivot_longer(df2, cols=-1, names_to = "var1", values_to = "income")
+df2.long
+
+# Split var1 column into two columns
+df2.sep <- separate(df2.long, col = var1, sep = "_", into = c("sex", "work"))
+df2.sep
+```
+
+## Splitting rows into multiple rows based on delimited values
+
+You can also split delimited values across rows. 
+
+```{r}
+separate_rows(df2.long, var1, sep="_")
+```
+
+Note that the output is a `tibble` even if the input is a dataframe. 
+
+## Replicate rows by count
+
+You can expand rows based on a count column using the `uncount()` function. This is the opposite of a `group_by(...) %>% count()` operation that tallies up the observations based on a grouping variable. Here, we'll replicate rows based on the column `count` value.
+
+```{r}
+df2b <- data.frame(var1= c("a", "b"), var2 = c("x", "y"), count = c(1, 3))
+df2b
+
+uncount(df2b, count)
+```
+
+If you want to add an index column that identifies the replicated rows, add an `.id` argument.
+
+```{r}
+uncount(df2b, count, .id = "id")
+```
+
+## Combining elements from many columns into a single column
+
+The `unite()` function performs the opposite task of `separate`. It combines multiple columns into a single column by aggregating their values.
+
+```{r}
+df2.unite <- unite(df2.sep, col = "var1", sep = ",", sex, work)
+df2.unite
+```
+
+## Creating unique combinations of variable values
+
+You can use `expand_grid` to automatically generate a table with unique combinations of a set of variable values. For example, to fill a table with a combination of student names and homework assignments, type:
+
+```{r}
+df3.long <- expand_grid(
+  student    = c("Joe", "Jane", "Kim"),  # Define all unique student names
+  assignment = c(paste0("HW", 1:4)),     # Define all unique HW assignments
+  value      = NA)
+df3.long
+```
+
+We can then create a wide version of the table using `pivot_wider`. 
+
+```{r}
+pivot_wider(df3.long, names_from = assignment, values_from = value)
+```
+
+## Filling gaps in a table with `NA`
+
+It's not uncommon to be handed a table with incomplete combinations of observations. For example, the following table gives us yield and data source values for each combination of year and grain type. However, several combinations of year/grain are missing.
+
+```{r}
+df4.long <- data.frame( Year  = c(1999,1999,2000,2000,2001,2003,2003,2005),
+                        Grain = c("Oats", "Corn","Oats", "Corn","Oats", "Oats", "Corn","Oats"),
+                        Yield = c(23,45,24,40,20,19,41,22),
+                        Src   = c("a","a","b","c","a","a","c","a"),
+                        stringsAsFactors = FALSE)
+df4.long
+```
+
+We are missing records for 2001 and Corn, 2003 and Corn, and data for both grains are missing for 2002 and 2004. To add rows for all missing pairs of year/grain values, use the `complete` function. Here, we'll assign `0` to missing `Yield` values and `NA` to the `Src` values.
+
+```{r}
+df.all <- complete(df4.long, Year=1999:2005, Grain=  c("Oats", "Corn"),
+                   fill = list(Yield = 0, Src = NA))
+df.all
+```
+
+If you want to show just the missing rows, use `dplyr::anti_join()`.
+
+```{r}
+dplyr::anti_join(df.all, df4.long)
+```
+
+## Identifying missing combination in dataframes
+
+In the previous example, we had the function automatically add the missing combinations using **explicitly** defined ranges of values. If you just want to output the missing combinations from the **existing** set of values in both columns, use the `expand()` function.
+
+
+```{r}
+p.all <- expand(df4.long, Year, Grain) # List all possible combinations
+p.all
+```
+
+Note that this only outputs the columns of interest. If you need to see the other columns in the output, perform a join.
+
+```{r}
+dplyr::left_join(p.all, df4.long, by=c("Year", "Grain"))
+```
+
+
+## Auto-fill down or up
+
+The `fill()` function is used to replace `NA` values with the closest non-`NA` value in a column. For example, to fill *down*, set the `.direction` argument to `"down"`.
+
+```{r}
+df5 <- data.frame(Month = 1:12, 
+                 Year = c(2000, rep(NA, 4),2001, rep(NA,6)))
+df5
+
+fill(df5, Year, .direction="down")
+```
+
