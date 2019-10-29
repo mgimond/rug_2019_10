@@ -284,3 +284,6 @@ df5
 fill(df5, Year, .direction="down")
 ```
 
+-----
+
+![Copyleft](http://i.creativecommons.org/l/by-sa/4.0/88x31.png) Manuel Gimond, 2019
